@@ -1,0 +1,24 @@
+global:
+ scrape_interval:     15s # By default, scrape targets every 15 seconds.
+
+# scrape_configs has jobs and targets to scrape for each.
+scrape_configs:
+ # job 1 is for testing prometheus instrumentation from multiple application processes.
+ # The job name is added as a label job=<job_name> to any timeseries scraped from this config.
+ - job_name: 'countaccess'
+
+   # Override the global default and scrape targets from this job every 5 seconds.
+   scrape_interval: 5s
+
+   # this is where to put multiple targets, e.g. for Kafka load generators and detectors
+   static_configs:
+     - targets: ['localhost:1234', 'localhost:1235']
+
+ # job 2 provides operating system metrics (e.g. CPU, memory etc).
+ - job_name: 'node'
+
+  # Override the global default and scrape targets from this job every 5 seconds.
+   scrape_interval: 5s
+
+   static_configs:
+     - targets: ['localhost:9100']

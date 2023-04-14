@@ -1,0 +1,78 @@
+variables:
+  - name: appPath
+    value: 'app'
+  - name: pythonVersion
+    value: '3.11'
+  - name: helmChart
+    value: './pyhelloworld'
+  - name: dockerfile
+    value: 'Dockerfile'
+  - name: registry
+    value: 'dockerHub'
+  - name: repositoryId
+    value: 'joaovicaria/pyhelmhw'
+
+stages:
+  - stage: Analyze
+    displayName: Analyze
+    condition: always()
+    jobs:
+      - job: Preflight
+        steps:
+          - script: |
+              curl https://baltocdn.com/helm/signing.asc | gpg --dearmor | sudo tee /usr/share/keyrings/helm.gpg > /dev/null
+              sudo apt-get install apt-transport-https --yes
+              echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/helm.gpg] https://baltocdn.com/helm/stable/debian/ all main" | sudo tee /etc/apt/sources.list.d/helm-stable-debian.list
+              sudo apt-get update
+              sudo apt-get install helm
+            displayName: Install Helm
+
+          #Define versao do python
+          - task: UsePythonVersion@0
+            displayName: Use Python ${{ variables.pythonVersion }}
+            inputs:
+              versionSpec: ${{ variables.pythonVersion }}
+
+            # Instala Pip
+          - bash: python -m ensurepip --upgrade
+            displayName: Install pip
+            # Instala Dependencias
+
+          - bash: pip install pytest-azurepipelines flake8 --upgrade
+            displayName: Install Dependencies
+
+            #Instala requirements
+          - bash: pip install -r requirements.txt
+            workingDirectory: ${{ variables.appPath }}
+            displayName: Install packages
+
+          # Lint via flake8.
+          - bash: flake8 --extend-ignore E501,W292
+            displayName: "Linting: flake8"
+            workingDirectory: ${{ variables.appPath }}
+            continueOnError: true
+
+          - script: helm lint ${{ variables.helmChart }}
+            displayName: "Linting: HelmChart"
+
+  - stage: PublishArtifact
+    displayName: PublishArtifact
+    dependsOn: Analyze
+    condition: in(variables['Build.SourceBranch'], 'refs/heads/main')
+    jobs:
+      - job: Publish_Container
+        steps:
+          - task: Docker@2
+            displayName: 'Login to Container Registry'
+            inputs:
+              command: login
+              containerRegistry: ${{ variables.registry }}
+          - task: Docker@2
+            displayName: 'Build and push image'
+            inputs:
+              dockerfile: '${{ variables.dockerfile }}'
+              command: buildAndPush
+              containerRegistry: ${{ variables.registry }}
+              repository: '${{ variables.repositoryId }}'
+              tags: |
+                $(Build.BuildId)
